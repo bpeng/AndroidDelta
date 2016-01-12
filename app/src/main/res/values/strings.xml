@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">AndroidDelta</string>
+    <string name="action_logout">Unlink from Dropbox</string>
+    <string name="action_settings">Settings</string>
+    <string name="search_hint">Site code or place name</string>
+    <string name="search_text">Search</string>
+</resources>

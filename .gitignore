@@ -1,0 +1,12 @@
+/local.properties
+/.idea/workspace.xml
+/.idea
+.gradle
+*.iml
+.DS_Store
+*com_crashlytics_export_strings.xml
+build/
+app/src/main/assets/crashlytics-build.properties
+.irb-history
+screenshot*
+test_servers/
