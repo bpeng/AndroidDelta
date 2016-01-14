@@ -26,12 +26,23 @@ import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
 
+import ezvcard.VCard;
+import ezvcard.io.text.VCardReader;
+import ezvcard.parameter.RelatedType;
+import ezvcard.parameter.TelephoneType;
+import ezvcard.property.Categories;
+import ezvcard.property.FormattedName;
+import ezvcard.property.Related;
+import ezvcard.property.Telephone;
+
 /**
  * Created by baishan on 13/01/16.
  */
 public class SearchPlaces extends AsyncTask<Void, Long, Boolean> {
 
 
+    private static final String TAG = "SearchPlaces";
+    private final String mSearchText;
     private Context mContext;
     private final ProgressDialog mDialog;
     private DropboxAPI<?> mApi;
@@ -44,20 +55,17 @@ public class SearchPlaces extends AsyncTask<Void, Long, Boolean> {
     //private boolean mCanceled;
     private Long mFileLen;
     private String mErrorMsg;
-    private List<String> mVcardContents;
-
-    // Note that, since we use a single file name here for simplicity, you
-    // won't be able to use this code for two simultaneous downloads.
-    private final static String IMAGE_FILE_NAME = "dbroulette.png";
+    private String mVcardContents;
 
     public SearchPlaces(Context context, DropboxAPI<?> api,
-                        String dropboxPath, LinearLayout view) {
+                        String dropboxPath, LinearLayout view, String searchText) {
         // We set the context this way so we don't accidentally leak activities
         mContext = context;
 
         mApi = api;
         mPath = dropboxPath;
         mSearchResultView = view;
+        mSearchText = searchText;
 
         mDialog = new ProgressDialog(context);
         mDialog.setMessage("Searching");
@@ -66,6 +74,7 @@ public class SearchPlaces extends AsyncTask<Void, Long, Boolean> {
 
     @Override
     protected Boolean doInBackground(Void... params) {
+        mVcardContents = "";
         try {
             // Get the metadata for a directory
             DropboxAPI.Entry dirent = mApi.metadata(mPath, 1000, null, true, null);
@@ -76,21 +85,13 @@ public class SearchPlaces extends AsyncTask<Void, Long, Boolean> {
                 return false;
             }
 
-            // Make a list of everything in it that we can get a thumbnail for
-            ArrayList<DropboxAPI.Entry> vcardFiles = new ArrayList<DropboxAPI.Entry>();
-            if (mVcardContents == null) {
-                mVcardContents = new ArrayList<String>();
-            } else {
-                mVcardContents.clear();
-            }
             for (DropboxAPI.Entry ent : dirent.contents) {
                 Log.i("SearchPlaces", "## path " + ent.path + " file name" + ent.fileName());
                 if (ent.fileName().endsWith(".vcf")) {
-                    // Add it to the list of thumbs we can choose from
-                    // vcardFiles.add(ent);
-                    String content = fromStream(mApi.getFileStream(ent.path, ent.rev));
-                    //Log.i("SearchPlaces", "## content " + content);
-                    mVcardContents.add(content);
+                    String content = readVcard(mApi.getFileStream(ent.path, ent.rev));
+                    if (content != null) {
+                        mVcardContents += readVcard(mApi.getFileStream(ent.path, ent.rev));
+                    }
                 }
             }
 
@@ -102,27 +103,6 @@ public class SearchPlaces extends AsyncTask<Void, Long, Boolean> {
             // We canceled the operation
             mErrorMsg = "Download canceled";
         } catch (DropboxServerException e) {
-            // Server-side exception.  These are examples of what could happen,
-            // but we don't do anything special with them here.
-            if (e.error == DropboxServerException._304_NOT_MODIFIED) {
-                // won't happen since we don't pass in revision with metadata
-            } else if (e.error == DropboxServerException._401_UNAUTHORIZED) {
-                // Unauthorized, so we should unlink them.  You may want to
-                // automatically log the user out in this case.
-            } else if (e.error == DropboxServerException._403_FORBIDDEN) {
-                // Not allowed to access this
-            } else if (e.error == DropboxServerException._404_NOT_FOUND) {
-                // path not found (or if it was the thumbnail, can't be
-                // thumbnailed)
-            } else if (e.error == DropboxServerException._406_NOT_ACCEPTABLE) {
-                // too many entries to return
-            } else if (e.error == DropboxServerException._415_UNSUPPORTED_MEDIA) {
-                // can't be thumbnailed
-            } else if (e.error == DropboxServerException._507_INSUFFICIENT_STORAGE) {
-                // user is over quota
-            } else {
-                // Something else
-            }
             // This gets the Dropbox error, translated into the user's language
             mErrorMsg = e.body.userError;
             if (mErrorMsg == null) {
@@ -137,9 +117,8 @@ public class SearchPlaces extends AsyncTask<Void, Long, Boolean> {
         } catch (DropboxException e) {
             // Unknown error
             mErrorMsg = "Unknown error.  Try again.";
-        } catch (IOException e) {
-            e.printStackTrace();
         }
+
         return false;
     }
 
@@ -168,20 +147,17 @@ public class SearchPlaces extends AsyncTask<Void, Long, Boolean> {
         if (result) {
             // Set the image now that we have it
             //mSearchResultView.setImageDrawable(mDrawable);
-            if (mVcardContents != null && mVcardContents.size() > 0) {
-                Log.i("SearchPlaces", "## mVcardContents " + mVcardContents.size());
+            if (mVcardContents != null && mVcardContents.length() > 0) {
+                Log.i("SearchPlaces", "## mVcardContents " + mVcardContents);
 
                 mSearchResultView.removeAllViews();
                 ViewGroup.LayoutParams params = new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.WRAP_CONTENT);
 
-                for (String content : mVcardContents) {
-                    TextView txtContent = new TextView(mContext);
-                    txtContent.setLayoutParams(params);
-                    txtContent.setText(content);
-                    Log.i("SearchPlaces", "## content " + content);
-                    mSearchResultView.addView(txtContent);
-                }
+                TextView txtContent = new TextView(mContext);
+                txtContent.setLayoutParams(params);
+                txtContent.setText(mVcardContents);
+                mSearchResultView.addView(txtContent);
             }
         } else {
             // Couldn't download it, so show an error
@@ -193,4 +169,147 @@ public class SearchPlaces extends AsyncTask<Void, Long, Boolean> {
         Toast error = Toast.makeText(mContext, msg, Toast.LENGTH_LONG);
         error.show();
     }
+
+    /**
+     * VCARD stuff
+     */
+    private String readVcard(InputStream vcardStream) {
+        String content = null;
+        List<VCard> allVcards = new ArrayList<VCard>();
+        VCardReader reader = new VCardReader(vcardStream);
+        try {
+            VCard vcard;
+            while ((vcard = reader.readNext()) != null) {
+                allVcards.add(vcard);
+            }
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        } finally {
+            try {
+                reader.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+        //String searchText = "NLSN";
+        VCard vcardFound = null;
+        for (VCard vcard : allVcards) {
+            if (searchCard(vcard, mSearchText)) {
+                vcardFound = vcard;
+            }
+        }
+
+        if (vcardFound != null) {
+            content = toVcardString(vcardFound);
+            Log.i(TAG, "##content " + content);
+            //3. related
+            for (Related related : vcardFound.getRelations()) {
+                String typeValue = "";
+                int index = 0;
+                for (RelatedType type : related.getTypes()) {
+                    if (index++ > 0) {
+                        typeValue += ", ";
+                    }
+                    typeValue += type.getValue();
+                }
+                VCard relatedCard = findVcardByUri(related.getUri().trim(), allVcards);
+                if (relatedCard != null) {
+                    if (!"".equals(typeValue)) {
+                        content += "\nType: " + typeValue;
+                    }
+                    content += toVcardString(relatedCard);
+                } else {
+                    //log("relatedCard " + relatedCard);
+                }
+            }
+            //log(content);
+        }
+
+        return content;
+    }
+
+    /**
+     * search vcard see if contain certain text
+     *
+     * @param vcard
+     * @param searchText
+     * @return
+     */
+    private boolean searchCard(VCard vcard, String searchText) {
+        searchText = searchText.toLowerCase();
+        //1. name
+        FormattedName fn = vcard.getFormattedName();
+        if (fn != null) {
+            String name = fn.getValue();
+            if (name.toLowerCase().contains(searchText)) {
+                return true;
+            }
+        }
+
+        //2. categories
+        Categories categories = vcard.getCategories();
+        //log("categories " + categories);
+        if (categories != null) {
+            for (Object value : categories.getValues()) {
+                if (value.toString().toLowerCase().contains(searchText)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private String toVcardString(VCard vcard) {
+        StringBuffer content = new StringBuffer();
+        //1. name
+        FormattedName fn = vcard.getFormattedName();
+        if (fn != null) {
+            content.append("\nName: ").append(fn.getValue());
+        }
+        String name = (fn == null) ? null : fn.getValue();
+        //2. categories
+        Categories categories = vcard.getCategories();
+        if (categories != null) {
+            content.append("\nCategories: ");
+            int index = 0;
+            for (Object value : categories.getValues()) {
+                if (index++ > 0) {
+                    content.append(", ");
+                }
+                content.append(value);
+            }
+        }
+
+        //3. phone
+        List<Telephone> phones = vcard.getTelephoneNumbers();
+        for (Telephone phone : phones) {
+            String types = "";
+            int index = 0;
+            for (TelephoneType telephoneType : phone.getTypes()) {
+                if (index++ > 0) {
+                    types += ", ";
+                }
+                types += telephoneType.getValue();
+            }
+            if (types != null) {
+                content.append("\n").append(types);
+            }
+            content.append(phone.getText());
+        }
+
+        return content.toString();
+    }
+
+    private VCard findVcardByUri(String uri, List<VCard> allVcards) {
+        for (VCard vcard : allVcards) {
+            if (uri.equalsIgnoreCase(vcard.getUid().getValue().trim())) {
+                return vcard;
+            }
+        }
+        return null;
+    }
+
 }

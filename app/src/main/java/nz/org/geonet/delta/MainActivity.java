@@ -11,6 +11,7 @@ import android.support.v7.widget.Toolbar;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.MotionEvent;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
@@ -112,19 +113,25 @@ public class MainActivity extends AppCompatActivity {
         mSearchText = (EditText) findViewById(R.id.txt_search_place);
         mSearchButton = (Button) findViewById(R.id.btn_search_place);
         //
-        mSearchText.setOnClickListener(new View.OnClickListener() {
+        mSearchText.setOnTouchListener(new View.OnTouchListener() {
             @Override
-            public void onClick(View v) {
+            public boolean onTouch(View v, MotionEvent event) {
                 if (getResources().getString(R.string.search_hint).equals(mSearchText.getText().toString())) {
                     mSearchText.setText(""); //clear hint text
                 }
+                return true;
             }
         });
 
         mSearchButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                searchPlacesFromVCard();
+                String searchText = mSearchText.getText().toString();
+                if ("".equals(searchText) || getResources().getString(R.string.search_hint).equals(searchText)) {
+                //nothing to search!!
+                } else {
+                    searchPlacesFromVCard(searchText);
+                }
             }
         });
 
@@ -135,10 +142,12 @@ public class MainActivity extends AppCompatActivity {
 
     /**
      * search places from vcard
+     *
+     * @param searchText
      */
-    private void searchPlacesFromVCard() {
-        SearchPlaces download = new SearchPlaces(MainActivity.this, mApi, DROPBOX_DIR, mDisplay);
-        download.execute();
+    private void searchPlacesFromVCard(String searchText) {
+        SearchPlaces search = new SearchPlaces(MainActivity.this, mApi, DROPBOX_DIR, mDisplay, searchText);
+        search.execute();
     }
 
 

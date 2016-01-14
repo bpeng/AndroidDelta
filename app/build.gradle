@@ -20,9 +20,14 @@ android {
 }
 
 dependencies {
+    compile 'com.android.support:appcompat-v7:23.1.0'
+    compile 'com.android.support:design:23.1.0'
+
+    compile('com.googlecode.ez-vcard:ez-vcard:0.9.8') {
+        exclude group: 'org.freemarker', module: 'freemarker'
+    }
     compile files('libs/dropbox-android-sdk-1.6.3.jar')
     compile files('libs/httpmime-4.0.3.jar')
     compile files('libs/json_simple-1.1.jar')
-    compile 'com.android.support:appcompat-v7:23.1.0'
-    compile 'com.android.support:design:23.1.0'
+
 }
