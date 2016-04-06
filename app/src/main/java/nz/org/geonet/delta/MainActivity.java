@@ -13,18 +13,37 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 
+import com.android.volley.Request;
+import com.android.volley.RequestQueue;
+import com.android.volley.Response;
+import com.android.volley.VolleyError;
+import com.android.volley.toolbox.StringRequest;
+import com.android.volley.toolbox.Volley;
 import com.dropbox.client2.DropboxAPI;
 import com.dropbox.client2.android.AndroidAuthSession;
 import com.dropbox.client2.android.AuthActivity;
 import com.dropbox.client2.session.AccessTokenPair;
 import com.dropbox.client2.session.AppKeyPair;
 
+import java.io.BufferedInputStream;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+
+import nz.org.geonet.quake.QuakeData;
+import nz.org.geonet.volley.InputStreamVolleyRequest;
 
 public class MainActivity extends AppCompatActivity {
     private static final String TAG = "MainActivity";
@@ -135,10 +154,121 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
+        /**
+         * ##################################################
+         * test to parse the protobuf message as described in
+         * https://blog.geoffc.nz/protobufs-go/
+         * and
+         * https://github.com/bpeng/protobuf
+         */
+        //fetch protobuf quake
+        Button quakeButton = (Button) findViewById(R.id.btn_quake);
+        quakeButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+
+                Thread thread = new Thread(new Runnable() {
+                    @Override
+                    public void run() {
+                        try {
+                            fetchQuake();
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+                    }
+                });
+
+                thread.start();
+            }
+        });
+
         // Display the proper UI state if logged in or not
         setLoggedIn(mApi.getSession().isLinked());
 
     }
+
+    private void fetchQuake() {
+        // Instantiate the RequestQueue.
+        RequestQueue queue = Volley.newRequestQueue(this);
+        //http://jwork.ddns.net:8008/2015p768477.pb
+        String urlQuake = "https://dl.dropboxusercontent.com/u/5294551/geonet/api/2015p768477.pb";
+
+        /**
+         * 1. use HttpURLConnection
+
+         HttpURLConnection urlConnection = null;
+         try {
+         URL url = new URL(urlQuake);
+         urlConnection = (HttpURLConnection) url.openConnection();
+         InputStream in = new BufferedInputStream(urlConnection.getInputStream());
+         //ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+
+         try {
+         QuakeData.Quake quake = QuakeData.Quake.parseFrom(in);
+         Log.i(TAG, "## quake "+ quake.toString());
+         showContent(quake.toString());
+         } catch (IOException e) {
+         Log.e(TAG, "error " + e);
+         }
+
+         }catch (Exception e) {
+         e.printStackTrace();
+         } finally {
+         urlConnection.disconnect();
+         }
+         **/
+
+        // Request a string response from the provided URL.
+
+        /**
+         * 2. use volley, have to implement binary request!!!
+         **/
+
+        InputStreamVolleyRequest stringRequest = new InputStreamVolleyRequest(Request.Method.GET, urlQuake,
+                new Response.Listener<byte[]>() {
+                    @Override
+                    public void onResponse(byte[] response) {
+                        // Display the first 500 characters of the response string.
+                        Log.i(TAG, "Response is: " + response.toString());
+                        try {
+                            QuakeData.Quake quake =
+                                    QuakeData.Quake.parseFrom(response);
+                            Log.i(TAG, "## quake " + quake.toString());
+                            showContent(quake.toString());
+                        } catch (IOException e) {
+                            Log.e(TAG, "error " + e);
+                        }
+                    }
+                }, new Response.ErrorListener() {
+            @Override
+            public void onErrorResponse(VolleyError error) {
+                Log.e(TAG, "That didn't work!" + error);
+            }
+        }, null);
+        // Add the request to the RequestQueue.
+        queue.add(stringRequest);
+
+    }
+
+    private void showContent(final String s) {
+        MainActivity.this.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                mDisplay.removeAllViews();
+                ViewGroup.LayoutParams params = new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT);
+
+                TextView txtContent = new TextView(MainActivity.this);
+                txtContent.setLayoutParams(params);
+                txtContent.setText(s);
+                mDisplay.addView(txtContent);
+            }
+        });
+    }
+    /**
+     * PROTOBUF END!!
+     * ##############
+     */
 
     /**
      * search places from vcard

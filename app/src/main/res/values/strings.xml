@@ -4,4 +4,5 @@
     <string name="action_settings">Settings</string>
     <string name="search_hint">Site code or place name</string>
     <string name="search_text">Search</string>
+    <string name="quake_text">Quake Protobuf</string>
 </resources>

@@ -54,6 +54,25 @@
                 android:text="@string/search_text" />
         </LinearLayout>
 
+        <LinearLayout
+            android:id="@+id/search_quake_container"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@color/map_info_background"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btn_quake"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_alignParentRight="true"
+                android:layout_gravity="right"
+                android:background="@drawable/btn_beige"
+                android:minHeight="40dp"
+                android:padding="5dp"
+                android:text="@string/quake_text" />
+        </LinearLayout>
+
         <ScrollView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
